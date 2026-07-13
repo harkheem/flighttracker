@@ -16,6 +16,11 @@ export function FlightsProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const rows = await listFlights();
+    console.log(
+      `[FlightsContext] loaded ${rows.length} flight(s) from DB: ${rows
+        .map((f) => `${f.flightNumber}@${f.departureTimeLocal.slice(0, 10)}`)
+        .join(', ')}`
+    );
     setFlights(rows);
     setLoading(false);
   }, []);

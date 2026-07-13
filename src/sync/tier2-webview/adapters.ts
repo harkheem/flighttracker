@@ -1,21 +1,96 @@
 import type { WebViewAirlineAdapter } from '../parsers/webviewTypes';
+import { parseSouthwestPayload } from './southwest';
+import { parseUnitedPayload } from './united';
 
-// TODO(real-world-testing, per ARCHITECTURE.md Tier 2): Every adapter below is a scaffold, not a
-// working scraper. Each airline's "My Trips" page structure, login flow, and bot-detection
-// posture (e.g. Akamai/PerimeterX challenges, which several major US airlines use) needs to be
-// inspected against a real logged-in session before extractionScript/parseExtractedPayload can
-// work. Treat this as the wiring for Tier 2, not a finished integration:
-//   1. Load myTripsUrl in the WebView and manually verify login works without being blocked.
-//   2. Inspect the DOM of the post-login trips page (Safari/Chrome remote debugging on the
-//      WebView) to find stable selectors for flight number, route, date/time, seat, etc.
-//   3. Update extractionScript to pull that data and postMessage it back as JSON.
-//   4. Implement parseExtractedPayload to map that JSON into FlightInput[].
-// Ship these disabled by default in Settings until a given airline's adapter is verified working.
+// TODO(real-world-testing, per ARCHITECTURE.md Tier 2): This captures real network traffic from
+// each airline's "My Trips" SPA — see NETWORK_INTERCEPTOR_SCRIPT below — which is far more
+// reliable than DOM scraping since it's the airline's own API JSON, not markup that changes on
+// every redesign. But parseExtractedPayload below is still a stub per airline: the exact response
+// shape (URL pattern, JSON structure) has to be observed from a real logged-in session before it
+// can be parsed. Workflow to finish an airline:
+//   1. Log in via this screen with a real account.
+//   2. The harvested payload (captured fetch/XHR responses + a DOM text fallback) gets posted
+//      back; wire up a temporary console.log of it (see AirlineWebViewScreen) to inspect via
+//      Metro logs, the same way the Gmail parsers were built against real email samples.
+//   3. Find the response containing trip/reservation data, then fill in parseExtractedPayload.
+// Ship an airline disabled/hidden in Settings until its adapter is verified against a real trip.
 
-const NOT_YET_IMPLEMENTED_SCRIPT = `
-  // TODO: replace with real DOM extraction for this airline's My Trips page.
-  window.ReactNativeWebView.postMessage(JSON.stringify({ status: 'not_implemented' }));
+// Installed before the page's own JS runs. Patches fetch/XHR to record any response whose URL
+// looks trip/reservation-related, capped to avoid unbounded memory growth on a chatty SPA.
+const NETWORK_INTERCEPTOR_SCRIPT = `
+(function() {
+  if (window.__ftInterceptorInstalled) { return true; }
+  window.__ftInterceptorInstalled = true;
+  window.__ftCaptured = [];
+
+  var KEYWORDS = ['trip', 'reservation', 'booking', 'itinerary', 'pnr', 'mytrips', 'my-trips', 'findyourtrip', 'air-reservation', 'manage'];
+
+  function isInteresting(url) {
+    try {
+      var lower = String(url).toLowerCase();
+      return KEYWORDS.some(function(k) { return lower.indexOf(k) !== -1; });
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function record(url, method, status, bodyText) {
+    try {
+      if (!isInteresting(url)) return;
+      if (window.__ftCaptured.length >= 20) return;
+      window.__ftCaptured.push({ url: String(url), method: String(method || 'GET'), status: Number(status) || 0, body: String(bodyText || '').slice(0, 20000) });
+    } catch (e) {}
+  }
+
+  var origFetch = window.fetch;
+  if (origFetch) {
+    window.fetch = function(input, init) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      var method = (init && init.method) || (input && input.method) || 'GET';
+      return origFetch.apply(this, arguments).then(function(res) {
+        try {
+          res.clone().text().then(function(text) { record(url, method, res.status, text); }).catch(function() {});
+        } catch (e) {}
+        return res;
+      });
+    };
+  }
+
+  var OrigXHR = window.XMLHttpRequest;
+  if (OrigXHR) {
+    var origOpen = OrigXHR.prototype.open;
+    var origSend = OrigXHR.prototype.send;
+    OrigXHR.prototype.open = function(method, url) {
+      this.__ftUrl = url;
+      this.__ftMethod = method;
+      return origOpen.apply(this, arguments);
+    };
+    OrigXHR.prototype.send = function() {
+      var self = this;
+      this.addEventListener('loadend', function() {
+        try { record(self.__ftUrl, self.__ftMethod, self.status, self.responseText); } catch (e) {}
+      });
+      return origSend.apply(this, arguments);
+    };
+  }
   true;
+})();
+`;
+
+// Runs after the page finishes loading. Waits for the SPA to settle (background API calls fire
+// after initial render), then posts back everything captured plus a DOM text fallback.
+const HARVEST_SCRIPT = `
+(function() {
+  setTimeout(function() {
+    var payload = {
+      captured: window.__ftCaptured || [],
+      bodyTextSnippet: (document.body && document.body.innerText || '').slice(0, 8000),
+      title: document.title || ''
+    };
+    window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+  }, 5000);
+  true;
+})();
 `;
 
 function stubAdapter(airlineCode: string, airlineName: string, myTripsUrl: string): WebViewAirlineAdapter {
@@ -23,9 +98,10 @@ function stubAdapter(airlineCode: string, airlineName: string, myTripsUrl: strin
     airlineCode,
     airlineName,
     myTripsUrl,
-    extractionScript: NOT_YET_IMPLEMENTED_SCRIPT,
+    networkInterceptorScript: NETWORK_INTERCEPTOR_SCRIPT,
+    extractionScript: HARVEST_SCRIPT,
     parseExtractedPayload(_payload: string) {
-      // TODO: implement once extractionScript above is filled in for this airline.
+      // TODO: implement once a real captured response has been inspected for this airline.
       return [];
     },
   };
@@ -33,7 +109,21 @@ function stubAdapter(airlineCode: string, airlineName: string, myTripsUrl: strin
 
 export const WEBVIEW_ADAPTERS: WebViewAirlineAdapter[] = [
   stubAdapter('DL', 'Delta Air Lines', 'https://www.delta.com/mytrips/'),
-  stubAdapter('UA', 'United Airlines', 'https://www.united.com/en/us/manageres/mytrips'),
+  {
+    airlineCode: 'UA',
+    airlineName: 'United Airlines',
+    myTripsUrl: 'https://www.united.com/en/us/manageres/mytrips',
+    networkInterceptorScript: NETWORK_INTERCEPTOR_SCRIPT,
+    extractionScript: HARVEST_SCRIPT,
+    parseExtractedPayload: parseUnitedPayload,
+  },
   stubAdapter('AA', 'American Airlines', 'https://www.aa.com/reservation/view/find-your-trip'),
-  stubAdapter('WN', 'Southwest Airlines', 'https://www.southwest.com/air/manage-reservation/'),
+  {
+    airlineCode: 'WN',
+    airlineName: 'Southwest Airlines',
+    myTripsUrl: 'https://www.southwest.com/my-account/upcoming-trips',
+    networkInterceptorScript: NETWORK_INTERCEPTOR_SCRIPT,
+    extractionScript: HARVEST_SCRIPT,
+    parseExtractedPayload: parseSouthwestPayload,
+  },
 ];

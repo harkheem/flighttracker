@@ -17,6 +17,7 @@ interface FormState {
   airlineCode: string;
   flightNumber: string;
   confirmationCode: string;
+  passengerName: string;
   departureAirportCode: string;
   departureAirportName: string;
   arrivalAirportCode: string;
@@ -37,6 +38,7 @@ const EMPTY_FORM: FormState = {
   airlineCode: '',
   flightNumber: '',
   confirmationCode: '',
+  passengerName: '',
   departureAirportCode: '',
   departureAirportName: '',
   arrivalAirportCode: '',
@@ -60,6 +62,7 @@ function flightToForm(f: Flight): FormState {
     airlineCode: f.airlineCode ?? '',
     flightNumber: f.flightNumber,
     confirmationCode: f.confirmationCode ?? '',
+    passengerName: f.passengerName ?? '',
     departureAirportCode: f.departureAirport.code,
     departureAirportName: f.departureAirport.name ?? '',
     arrivalAirportCode: f.arrivalAirport.code,
@@ -148,6 +151,7 @@ export function AddEditFlightScreen() {
       airlineLogoUrl: null,
       flightNumber: form.flightNumber.trim().toUpperCase(),
       confirmationCode: form.confirmationCode.trim() || null,
+      passengerName: form.passengerName.trim() || null,
       departureAirport: {
         code: form.departureAirportCode.trim().toUpperCase(),
         name: form.departureAirportName.trim() || null,
@@ -188,6 +192,7 @@ export function AddEditFlightScreen() {
         <Field label="Airline code (IATA)" value={form.airlineCode} onChangeText={set('airlineCode')} placeholder="DL" autoCapitalize="characters" />
         <Field label="Flight number" value={form.flightNumber} onChangeText={set('flightNumber')} placeholder="DL123" autoCapitalize="characters" />
         <Field label="Confirmation code" value={form.confirmationCode} onChangeText={set('confirmationCode')} placeholder="ABC123" autoCapitalize="characters" />
+        <Field label="Passenger name" value={form.passengerName} onChangeText={set('passengerName')} placeholder="Who is this flight for?" autoCapitalize="words" />
 
         <Text style={styles.sectionTitle}>Departure</Text>
         <Field label="Airport code" value={form.departureAirportCode} onChangeText={set('departureAirportCode')} placeholder="JFK" autoCapitalize="characters" />

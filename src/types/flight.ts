@@ -16,6 +16,7 @@ export interface Flight {
   airlineLogoUrl: string | null;
   flightNumber: string; // e.g. "DL123"
   confirmationCode: string | null; // PNR
+  passengerName: string | null; // who the ticket is for — may differ from the account owner
 
   departureAirport: Airport;
   arrivalAirport: Airport;

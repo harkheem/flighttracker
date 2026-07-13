@@ -1,4 +1,3 @@
-import { ensureValidAccessToken } from './gmailAuth';
 import type { RawEmail } from '../parsers/types';
 
 const GMAIL_API_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
@@ -71,9 +70,11 @@ async function gmailFetch(path: string, accessToken: string): Promise<Response> 
 
 // Searches Gmail for messages matching `query` (see EmailParser.gmailQuery) and returns them
 // normalized as RawEmail. Capped at `maxResults` per call to keep background syncs bounded.
-export async function searchGmailMessages(query: string, maxResults = 25): Promise<RawEmail[]> {
-  const accessToken = await ensureValidAccessToken();
-
+export async function searchGmailMessages(
+  query: string,
+  accessToken: string,
+  maxResults = 75
+): Promise<RawEmail[]> {
   const listRes = await gmailFetch(
     `/messages?q=${encodeURIComponent(query)}&maxResults=${maxResults}`,
     accessToken

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFlights } from '../state/FlightsContext';
 import { FlightCard } from '../components/FlightCard';
 import { isUpcoming } from '../utils/format';
@@ -13,6 +14,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function TimelineScreen() {
   const navigation = useNavigation<Nav>();
   const { flights, loading, refresh } = useFlights();
+  const insets = useSafeAreaInsets();
 
   const sections = useMemo(() => {
     const upcoming = flights.filter(isUpcoming).sort((a, b) =>
@@ -30,6 +32,9 @@ export function TimelineScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Text style={styles.headerTitle}>Flights</Text>
+      </View>
       <SectionList
         sections={sections}
         keyExtractor={(item: Flight) => item.id}
@@ -54,7 +59,7 @@ export function TimelineScreen() {
         }
       />
       <Pressable
-        style={styles.fab}
+        style={[styles.fab, { bottom: insets.bottom + 16 }]}
         onPress={() => navigation.navigate('AddEditFlight', {})}
         accessibilityLabel="Add flight"
       >
@@ -66,6 +71,12 @@ export function TimelineScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F4F6' },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    backgroundColor: '#F3F4F6',
+  },
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827' },
   sectionHeader: {
     fontSize: 13,
     fontWeight: '700',

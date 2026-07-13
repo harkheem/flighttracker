@@ -8,7 +8,39 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.flighttracker",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.515505738344-lhlipe10ic0tmivmchj05o5ic133efqa"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "flighttracker"
+            ]
+          }
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "exp.direct": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            },
+            "ngrok.io": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            },
+            "ngrok-free.app": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +58,9 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-background-task",
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withoutPushEntitlement.js",
+      "expo-image"
     ]
   }
 }

@@ -7,6 +7,7 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { FlightsProvider } from './src/state/FlightsContext';
 import { requestNotificationPermissions } from './src/notifications/scheduleFlightNotifications';
 import { registerBackgroundSync } from './src/sync/backgroundSync';
+import { SilentAirlineSync } from './src/components/SilentAirlineSync';
 
 export default function App() {
   useEffect(() => {
@@ -22,6 +23,7 @@ export default function App() {
             <RootNavigator />
             <StatusBar style="auto" />
           </NavigationContainer>
+          <SilentAirlineSync />
         </FlightsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

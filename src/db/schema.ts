@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS flights (
   airline_logo_url TEXT,
   flight_number TEXT NOT NULL,
   confirmation_code TEXT,
+  passenger_name TEXT,
 
   departure_airport_code TEXT NOT NULL,
   departure_airport_name TEXT,

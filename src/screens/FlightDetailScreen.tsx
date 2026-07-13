@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Pressable } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigation/types';
@@ -9,6 +11,8 @@ import { getFlight, deleteFlight } from '../db/flightsRepo';
 import { useFlights } from '../state/FlightsContext';
 import { formatDateTime } from '../utils/format';
 import { refreshFlight } from '../sync/refreshFlight';
+import { useDestinationImage } from '../utils/destinationImage';
+import { cityForAirport, wikiTitleForAirport } from '../utils/airportCities';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type DetailRoute = RouteProp<RootStackParamList, 'FlightDetail'>;
@@ -33,6 +37,10 @@ export function FlightDetailScreen() {
   useEffect(() => {
     getFlight(route.params.flightId).then(setFlight);
   }, [route.params.flightId]);
+
+  const destinationCity = flight ? cityForAirport(flight.arrivalAirport.code, flight.arrivalAirport.name) : null;
+  const wikiTitle = flight ? wikiTitleForAirport(flight.arrivalAirport.code, flight.arrivalAirport.name) : null;
+  const heroImageUrl = useDestinationImage(wikiTitle);
 
   if (!flight) {
     return (
@@ -74,14 +82,26 @@ export function FlightDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.route}>
-        {flight.departureAirport.code} → {flight.arrivalAirport.code}
-      </Text>
-      <Text style={styles.airline}>
-        {flight.airlineName} {flight.flightNumber}
-      </Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.hero}>
+        {heroImageUrl ? (
+          <Image source={{ uri: heroImageUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.heroFallback]} />
+        )}
+        <LinearGradient colors={['transparent', 'rgba(17,24,39,0.9)']} style={StyleSheet.absoluteFill} />
+        <View style={styles.heroContent}>
+          <Text style={styles.route}>
+            {flight.departureAirport.code} → {flight.arrivalAirport.code}
+          </Text>
+          <Text style={styles.airline}>
+            {flight.airlineName} {flight.flightNumber}
+            {destinationCity ? `  ·  ${destinationCity}` : ''}
+          </Text>
+        </View>
+      </View>
 
+      <View style={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Departure</Text>
         <Row label="Airport" value={`${flight.departureAirport.code} — ${flight.departureAirport.name ?? ''}`} />
@@ -100,6 +120,7 @@ export function FlightDetailScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Booking</Text>
+        <Row label="Passenger" value={flight.passengerName} />
         <Row label="Confirmation" value={flight.confirmationCode} />
         <Row label="Seat" value={flight.seat} />
         <Row label="Cabin" value={flight.cabinClass} />
@@ -130,15 +151,20 @@ export function FlightDetailScreen() {
           <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
         </Pressable>
       </View>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 20, paddingBottom: 48 },
-  route: { fontSize: 28, fontWeight: '800', color: '#111827' },
-  airline: { fontSize: 15, color: '#6B7280', marginTop: 4, marginBottom: 20 },
+  scrollContent: { paddingBottom: 48 },
+  hero: { height: 220, justifyContent: 'flex-end' },
+  heroFallback: { backgroundColor: '#374151' },
+  heroContent: { padding: 20 },
+  content: { padding: 20 },
+  route: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  airline: { fontSize: 15, color: 'rgba(255,255,255,0.85)', marginTop: 4 },
   section: { marginBottom: 20, borderTopWidth: StyleSheet.hairlineWidth, borderColor: '#E5E7EB', paddingTop: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#6B7280', textTransform: 'uppercase', marginBottom: 8 },
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },

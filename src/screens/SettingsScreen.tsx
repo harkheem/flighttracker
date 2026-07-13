@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import type { Connection } from '../types/flight';
 import { listConnections } from '../db/connectionsRepo';
-import { connectGmail, disconnectGmail, isGmailConnected } from '../sync/tier1-gmail/gmailAuth';
+import { connectGmail, disconnectGmail, listGmailAccounts } from '../sync/tier1-gmail/gmailAuth';
 import { syncGmail } from '../sync/tier1-gmail/gmailSync';
 import { WEBVIEW_ADAPTERS } from '../sync/tier2-webview/adapters';
 import { useFlights } from '../state/FlightsContext';
@@ -48,14 +49,15 @@ function ConnectionRow({
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const { refresh: refreshFlights } = useFlights();
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailAccounts, setGmailAccounts] = useState<string[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setConnections(await listConnections());
-    setGmailConnected(await isGmailConnected());
+    setGmailAccounts(await listGmailAccounts());
   }, []);
 
   useFocusEffect(
@@ -66,19 +68,12 @@ export function SettingsScreen() {
 
   const connectionFor = (id: string) => connections.find((c) => c.id === id) ?? null;
 
-  const handleGmailPress = async () => {
-    setBusyKey('gmail');
+  const handleSyncAllGmail = async () => {
+    setBusyKey('gmail-sync-all');
     try {
-      if (gmailConnected) {
-        await syncGmail();
-        await refreshFlights();
-        await reload();
-      } else {
-        await connectGmail();
-        await syncGmail();
-        await refreshFlights();
-        await reload();
-      }
+      await syncGmail();
+      await refreshFlights();
+      await reload();
     } catch (e) {
       Alert.alert('Gmail sync', e instanceof Error ? e.message : 'Something went wrong.');
     } finally {
@@ -86,14 +81,28 @@ export function SettingsScreen() {
     }
   };
 
-  const handleGmailDisconnect = () => {
-    Alert.alert('Disconnect Gmail?', 'Imported flights will remain, but auto-sync will stop.', [
+  const handleAddGmailAccount = async () => {
+    setBusyKey('gmail-add');
+    try {
+      await connectGmail();
+      await syncGmail();
+      await refreshFlights();
+      await reload();
+    } catch (e) {
+      Alert.alert('Gmail sign-in', e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const handleGmailDisconnect = (email: string) => {
+    Alert.alert(`Disconnect ${email}?`, 'Imported flights will remain, but auto-sync for this account will stop.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Disconnect',
         style: 'destructive',
         onPress: async () => {
-          await disconnectGmail();
+          await disconnectGmail(email);
           await reload();
         },
       },
@@ -101,25 +110,39 @@ export function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
+    >
+      <Text style={styles.screenTitle}>Settings</Text>
       <Text style={styles.sectionTitle}>Email (Tier 1)</Text>
-      <ConnectionRow
-        title="Gmail"
-        subtitle={
-          gmailConnected
-            ? `Last synced: ${connectionFor('gmail')?.lastSyncedAt?.slice(0, 16).replace('T', ' ') ?? 'never'}`
-            : 'Read-only access, scans for airline confirmation emails'
-        }
-        status={gmailConnected ? connectionFor('gmail')?.status ?? 'connected' : 'not_connected'}
-        actionLabel={gmailConnected ? 'Sync now' : 'Connect'}
-        onPress={handleGmailPress}
-        busy={busyKey === 'gmail'}
-      />
-      {gmailConnected && (
-        <Pressable onPress={handleGmailDisconnect}>
-          <Text style={styles.disconnectLink}>Disconnect Gmail</Text>
-        </Pressable>
-      )}
+      {gmailAccounts.map((email) => {
+        const conn = connectionFor(`gmail:${email}`);
+        return (
+          <View key={email}>
+            <ConnectionRow
+              title={email}
+              subtitle={`Last synced: ${conn?.lastSyncedAt?.slice(0, 16).replace('T', ' ') ?? 'never'}`}
+              status={conn?.status ?? 'connected'}
+              actionLabel="Sync now"
+              onPress={handleSyncAllGmail}
+              busy={busyKey === 'gmail-sync-all'}
+            />
+            <Pressable onPress={() => handleGmailDisconnect(email)}>
+              <Text style={styles.disconnectLink}>Disconnect</Text>
+            </Pressable>
+          </View>
+        );
+      })}
+      <Pressable style={styles.manualButton} onPress={handleAddGmailAccount} disabled={busyKey === 'gmail-add'}>
+        <Text style={styles.manualButtonText}>
+          {busyKey === 'gmail-add'
+            ? 'Connecting…'
+            : gmailAccounts.length === 0
+              ? 'Connect Gmail'
+              : 'Add another Gmail account'}
+        </Text>
+      </Pressable>
 
       <Text style={styles.sectionTitle}>Airline logins (Tier 2, best-effort)</Text>
       {WEBVIEW_ADAPTERS.map((adapter) => {
@@ -152,6 +175,7 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   content: { padding: 20, paddingBottom: 48 },
+  screenTitle: { fontSize: 28, fontWeight: '800', color: '#111827', marginBottom: 8 },
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
